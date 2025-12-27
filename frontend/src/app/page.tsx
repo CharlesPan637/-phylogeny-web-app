@@ -274,29 +274,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Alignment Preview */}
-            <div className="bg-white rounded-2xl shadow-xl p-8">
-              <h2 className="text-2xl font-bold mb-4 text-gray-800">
-                🔤 Alignment Preview (First 80 positions)
-              </h2>
-              <div className="bg-gray-900 p-4 rounded-lg overflow-x-auto">
-                <pre className="text-green-400 font-mono text-xs leading-relaxed">
-                  {results.alignment_preview?.map((line: any, idx: number) => (
-                    <div key={idx} className={line.id === 'Conservation' ? 'text-yellow-400 mt-1' : ''}>
-                      <span className="text-blue-400 inline-block w-32">{line.id}</span>
-                      {line.sequence}
-                    </div>
-                  ))}
-                </pre>
-              </div>
-              <div className="mt-4 text-sm text-gray-600">
-                <p><span className="text-yellow-400 font-mono">*</span> = Identical (all non-gap residues are the same)</p>
-                <p><span className="text-yellow-400 font-mono">:</span> = Low variation (2 or fewer different residues)</p>
-                <p><span className="text-yellow-400 font-mono">.</span> = Fully aligned (no gaps at this position)</p>
-                <p><span className="text-gray-400 font-mono">(space)</span> = Contains gaps</p>
-              </div>
-            </div>
-
             {/* Full Alignment */}
             <div className="bg-white rounded-2xl shadow-xl p-8">
               <div className="flex justify-between items-start mb-4">
@@ -312,12 +289,9 @@ export default function Home() {
                 <a
                   href="/api/download-alignment"
                   download="clustal_alignment.aln"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                  Download Clustal File
+                  ⬇ Download Clustal File
                 </a>
               </div>
               <div className="bg-gray-900 rounded-lg border-2 border-gray-700 overflow-auto max-h-[32rem]">
