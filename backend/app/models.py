@@ -9,13 +9,15 @@ from enum import Enum
 class AnalysisRequest(BaseModel):
     """Request model for phylogeny analysis"""
     accessions: List[str] = Field(..., description="List of UniProt accession numbers", min_length=2)
-    trim_motif: Optional[str] = Field(None, description="Optional motif to trim sequences")
+    trim_motif: Optional[str] = Field(None, description="Optional motif to trim sequences after")
+    trim_before_motif: Optional[str] = Field(None, description="Optional motif to trim sequences before")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "accessions": ["P0C6X7", "P17763", "P29991"],
-                "trim_motif": None
+                "trim_motif": None,
+                "trim_before_motif": None
             }
         }
 

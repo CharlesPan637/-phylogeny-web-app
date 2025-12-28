@@ -106,11 +106,19 @@ function renderTreeAscii(tree: any, prefix: string = '', isLast: boolean = true)
   return result
 }
 
+type InputMode = 'uniprot' | 'fasta'
+
 export default function Home() {
   const [accessions, setAccessions] = useState('P03314\nP17763\nP29991\nP27909\nP09866')
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<any>(null)
   const [error, setError] = useState('')
+
+  // New state for tab management and file upload
+  const [inputMode, setInputMode] = useState<InputMode>('uniprot')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [trimMotif, setTrimMotif] = useState('')
+  const [trimBeforeMotif, setTrimBeforeMotif] = useState('')
 
   const handleAnalyze = async () => {
     setLoading(true)
@@ -118,17 +126,92 @@ export default function Home() {
     setResults(null)
 
     try {
-      const accessionList = accessions.split('\n').map(a => a.trim()).filter(a => a)
+      if (inputMode === 'uniprot') {
+        // Existing UniProt logic
+        const accessionList = accessions.split('\n').map(a => a.trim()).filter(a => a)
 
-      const response = await axios.post('/api/analyze', {
-        accessions: accessionList
-      })
+        if (accessionList.length < 2) {
+          setError('Please enter at least 2 UniProt accessions')
+          setLoading(false)
+          return
+        }
 
-      setResults(response.data)
+        const response = await axios.post('/api/analyze', {
+          accessions: accessionList,
+          trim_motif: trimMotif || undefined,
+          trim_before_motif: trimBeforeMotif || undefined
+        })
+
+        setResults(response.data)
+      } else {
+        // New FASTA file upload logic
+        if (!selectedFile) {
+          setError('Please select a FASTA file')
+          setLoading(false)
+          return
+        }
+
+        const formData = new FormData()
+        formData.append('file', selectedFile)
+        if (trimMotif) {
+          formData.append('trim_motif', trimMotif)
+        }
+        if (trimBeforeMotif) {
+          formData.append('trim_before_motif', trimBeforeMotif)
+        }
+
+        const response = await axios.post('/api/analyze-fasta', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+
+        setResults(response.data)
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Analysis failed. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+
+    if (file) {
+      // Validate file extension
+      const fileName = file.name.toLowerCase()
+      const validExtensions = ['fasta', 'fa', 'faa']
+      const hasValidExtension = validExtensions.some(ext =>
+        fileName.endsWith('.' + ext) || fileName.endsWith('.' + ext + '.txt')
+      )
+
+      if (!hasValidExtension) {
+        setError(`Invalid file format. File name: "${file.name}". Please select a .fasta, .fa, or .faa file`)
+        setSelectedFile(null)
+        e.target.value = ''
+        return
+      }
+
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024
+      if (file.size > maxSize) {
+        setError('File too large. Maximum size is 10MB')
+        setSelectedFile(null)
+        e.target.value = ''
+        return
+      }
+
+      setSelectedFile(file)
+      setError('')
+    }
+  }
+
+  const clearFile = () => {
+    setSelectedFile(null)
+    const fileInput = document.getElementById('fasta-file-input') as HTMLInputElement
+    if (fileInput) {
+      fileInput.value = ''
     }
   }
 
@@ -145,25 +228,147 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Input Section */}
+        {/* Input Section with Tabs */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
-          <h2 className="text-2xl font-bold mb-4 text-gray-800">
-            Enter UniProt Accession Numbers
-          </h2>
-          <p className="text-gray-600 mb-4">
-            Enter UniProt IDs (one per line). Example: P0C6X7, P17763, P29991
-          </p>
+          {/* Tab Headers */}
+          <div className="flex border-b border-gray-200 mb-6">
+            <button
+              onClick={() => {
+                setInputMode('uniprot')
+                setError('')
+              }}
+              className={`px-6 py-3 font-semibold transition-all ${
+                inputMode === 'uniprot'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              UniProt Accessions
+            </button>
+            <button
+              onClick={() => {
+                setInputMode('fasta')
+                setError('')
+              }}
+              className={`px-6 py-3 font-semibold transition-all ${
+                inputMode === 'fasta'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Upload FASTA File
+            </button>
+          </div>
 
-          <textarea
-            className="w-full h-40 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-            value={accessions}
-            onChange={(e) => setAccessions(e.target.value)}
-            placeholder="P0C6X7&#10;P17763&#10;P29991"
-          />
+          {/* UniProt Tab Content */}
+          {inputMode === 'uniprot' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                Enter UniProt Accession Numbers
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Enter UniProt IDs (one per line). Example: P0C6X7, P17763, P29991
+              </p>
 
+              <textarea
+                className="w-full h-40 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                value={accessions}
+                onChange={(e) => setAccessions(e.target.value)}
+                placeholder="P0C6X7&#10;P17763&#10;P29991"
+              />
+            </div>
+          )}
+
+          {/* FASTA Upload Tab Content */}
+          {inputMode === 'fasta' && (
+            <div>
+              <h2 className="text-2xl font-bold mb-4 text-gray-800">
+                Upload FASTA File
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Upload a FASTA file containing at least 2 protein sequences. Accepted formats: .fasta, .fa, .faa
+              </p>
+
+              {/* File Input */}
+              {!selectedFile ? (
+                <div className="my-8 p-4 bg-blue-50 border-2 border-blue-300 rounded">
+                  <label className="block mb-2 text-sm font-medium text-gray-700">
+                    Choose a FASTA file:
+                  </label>
+                  <input
+                    id="fasta-file-input"
+                    type="file"
+                    accept=".fasta,.fa,.faa"
+                    onChange={handleFileChange}
+                    className="block w-full text-sm text-gray-900 border-2 border-blue-500 rounded-lg cursor-pointer bg-white focus:outline-none p-3"
+                    style={{ minHeight: '50px' }}
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Accepted formats: .fasta, .fa, .faa (up to 10MB)
+                  </p>
+                </div>
+              ) : (
+                  <div className="my-4 p-4 bg-green-50 border-2 border-green-400 rounded" style={{maxWidth: '500px', margin: '1rem auto'}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <p style={{fontSize: '14px', fontWeight: '600', color: '#1f2937', marginBottom: '4px'}}>
+                          ✓ File selected: {selectedFile.name}
+                        </p>
+                        <p style={{fontSize: '12px', color: '#6b7280'}}>
+                          Size: {(selectedFile.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                      <button
+                        onClick={clearFile}
+                        style={{marginLeft: '12px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', color: '#dc2626', background: 'white', border: '1px solid #dc2626', borderRadius: '4px', cursor: 'pointer'}}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
+            </div>
+          )}
+
+          {/* Optional Trim Options (shown for both modes) */}
+          <div className="mt-6 space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Trim Before Motif (Optional)
+              </label>
+              <input
+                type="text"
+                value={trimBeforeMotif}
+                onChange={(e) => setTrimBeforeMotif(e.target.value)}
+                placeholder="e.g., MRCV"
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Remove sequence before this motif (keep motif and everything after)
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Trim After Motif (Optional)
+              </label>
+              <input
+                type="text"
+                value={trimMotif}
+                onChange={(e) => setTrimMotif(e.target.value)}
+                placeholder="e.g., GSVGFN"
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Keep sequence up to and including this motif (remove everything after)
+              </p>
+            </div>
+          </div>
+
+          {/* Analyze Button */}
           <button
             onClick={handleAnalyze}
-            disabled={loading}
+            disabled={loading || (inputMode === 'fasta' && !selectedFile)}
             className="mt-4 w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
           >
             {loading ? (
@@ -175,7 +380,7 @@ export default function Home() {
                 Analyzing sequences...
               </span>
             ) : (
-              '🚀 Analyze Sequences'
+              'Analyze Sequences'
             )}
           </button>
         </div>

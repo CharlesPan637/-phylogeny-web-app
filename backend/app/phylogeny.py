@@ -77,6 +77,64 @@ def download_uniprot_sequence(accession: str) -> Optional[Dict]:
         return None
 
 
+def parse_fasta_file(file_content: str) -> List[Dict]:
+    """
+    Parse FASTA file content into SequenceInfo dictionaries.
+
+    Args:
+        file_content: Raw FASTA file content as string
+
+    Returns:
+        List of sequence dictionaries compatible with the analysis pipeline
+
+    Raises:
+        ValueError: If FASTA format is invalid or no sequences found
+    """
+    logger.info("Parsing FASTA file content")
+
+    try:
+        sequences = []
+        fasta_io = StringIO(file_content)
+
+        for record in SeqIO.parse(fasta_io, "fasta"):
+            # Validate sequence contains only valid amino acids
+            valid_aa = set("ACDEFGHIKLMNPQRSTVWY-")
+            seq_upper = str(record.seq).upper()
+
+            if not all(c in valid_aa for c in seq_upper):
+                raise ValueError(f"Sequence {record.id} contains invalid amino acid characters")
+
+            # Extract organism from description if present (format: >ID organism [annotation])
+            organism = "Unknown"
+            description = record.description
+
+            # Try to extract organism from common FASTA formats
+            if '[' in description and ']' in description:
+                try:
+                    organism = description.split('[')[1].split(']')[0].strip()
+                except:
+                    pass
+
+            sequences.append({
+                'id': record.id,
+                'name': record.id,  # Use ID as name if not available
+                'description': description,
+                'sequence': str(record.seq),
+                'organism': organism,
+                'length': len(record.seq)
+            })
+
+        if len(sequences) < 2:
+            raise ValueError(f"FASTA file must contain at least 2 sequences, found {len(sequences)}")
+
+        logger.info(f"Successfully parsed {len(sequences)} sequences from FASTA file")
+        return sequences
+
+    except Exception as e:
+        logger.error(f"Error parsing FASTA file: {str(e)}")
+        raise ValueError(f"Invalid FASTA format: {str(e)}")
+
+
 def trim_sequence(seq_info: Dict, motif: str) -> Dict:
     """
     Trim sequence after a specific motif.
@@ -103,6 +161,36 @@ def trim_sequence(seq_info: Dict, motif: str) -> Dict:
     seq_info['sequence'] = trimmed_seq
     seq_info['length'] = len(trimmed_seq)
     seq_info['trimmed'] = True
+
+    return seq_info
+
+
+def trim_sequence_before(seq_info: Dict, motif: str) -> Dict:
+    """
+    Trim sequence before a specific motif (remove everything before motif, keep motif and after).
+
+    Args:
+        seq_info: Sequence dictionary
+        motif: Amino acid motif to search for
+
+    Returns:
+        Modified sequence dictionary
+    """
+    sequence = seq_info['sequence']
+    pos = sequence.find(motif)
+
+    if pos == -1:
+        logger.warning(f"Motif '{motif}' not found in {seq_info['id']}")
+        return seq_info
+
+    trimmed_seq = sequence[pos:]
+    original_length = len(sequence)
+
+    logger.info(f"Trimmed before motif in {seq_info['id']} from {original_length} to {len(trimmed_seq)} aa")
+
+    seq_info['sequence'] = trimmed_seq
+    seq_info['length'] = len(trimmed_seq)
+    seq_info['trimmed_before'] = True
 
     return seq_info
 
